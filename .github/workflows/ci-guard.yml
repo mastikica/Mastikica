@@ -1,0 +1,49 @@
+name: CI & infra guard
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Gather PR info
+        id: pr
+        run: |
+          echo "PR_NUMBER=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+          labels="$(jq -r '.pull_request.labels[].name' < $GITHUB_EVENT_PATH 2>/dev/null || true)"
+          echo "labels=$labels"
+          echo "PR_LABELS=$labels" >> $GITHUB_OUTPUT
+
+      - name: Check for CI/infra additions
+        run: |
+          # Compare with main branch
+          git fetch origin main:main
+          CHANGED=$(git diff --name-only origin/main...HEAD || true)
+          echo "changed files:"$CHANGED
+
+          # Patterns considered sensitive
+          SENSITIVE_PATTERN='(^|/)\.github/workflows/|(^|/)Dockerfile$|(^|/)docker-compose\.yml$|(^|/)infra/|(^|/)charts/'
+
+          echo "$CHANGED" | tr '\n' '\0' | xargs -0 -n1 -I{} bash -c 'echo "file:{}"'
+
+          if echo "$CHANGED" | grep -E "$SENSITIVE_PATTERN" >/dev/null; then
+            # Check for allow label
+            if echo "${{ steps.pr.outputs.PR_LABELS }}" | grep -qw "allow-ci"; then
+              echo "allow-ci label present — OK"
+              exit 0
+            else
+              echo "Sensitive CI/infra files detected in PR and 'allow-ci' label not present." >&2
+              echo "If you intend to add CI/infra, add the 'allow-ci' label and request owner review." >&2
+              exit 1
+            fi
+          else
+            echo "No sensitive CI/infra files added."
+          fi
+        shell: bash
