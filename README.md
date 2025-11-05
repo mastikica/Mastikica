@@ -6,6 +6,15 @@ Hi — I'm Mastikica. I build small open-source tools, explore web development, 
 
 I'm open to collaboration and learning new things. This repository is my GitHub profile README and is intended to stay small and focused.
 
+## Featured Project
+
+<img src="assets/demo-project.png" alt="Demo Project Screenshot" width="640" />
+
+This is a demo project showing how the repository's workflows protect content quality:
+1. Image size check: Ensures images stay under 200KB
+2. Auto-optimization: Automatically optimizes images in PRs
+3. CI guard: Prevents accidental CI/workflow additions
+
 Assets and images
 - Put images under the `assets/` folder at the repository root.
 - Keep individual images under 200 KB. A workflow will block PRs adding larger images so please optimize before opening a PR.
