@@ -1,0 +1,64 @@
+name: Image size check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  image-size:
+    name: Check assets image size
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch main
+        run: git fetch origin main:main
+
+      - name: Get changed files
+        id: changed
+        run: |
+          CHANGED=$(git diff --name-only origin/main...HEAD || true)
+          echo "changed_files<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGED" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          # also write to a workspace file so later steps don't need expression interpolation
+          echo "$CHANGED" > .changed_files || true
+
+      - name: Check asset sizes
+        env:
+          MAX_BYTES: 204800 # 200 KB
+        run: |
+          set -euo pipefail
+          CHANGED_FILES="$(cat .changed_files 2>/dev/null || true)"
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No changed files."
+            exit 0
+          fi
+
+          FAIL=0
+          echo "$CHANGED_FILES" | while IFS= read -r f; do
+            # only check files under assets/
+            case "$f" in
+              assets/*)
+                if [ -f "$f" ]; then
+                  size=$(wc -c <"$f" | tr -d '[:space:]')
+                  if [ "$size" -gt "$MAX_BYTES" ]; then
+                    echo "Asset $f is ${size} bytes, exceeds 200 KB limit ($MAX_BYTES bytes)." >&2
+                    FAIL=1
+                  else
+                    echo "Asset $f is ${size} bytes — OK."
+                  fi
+                fi
+                ;;
+              *)
+                ;;
+            esac
+          done
+
+          if [ "$FAIL" -eq 1 ]; then
+            echo "One or more assets exceed the 200 KB size limit. Please optimize the images or split them into smaller files." >&2
+            exit 1
+          fi
